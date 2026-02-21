@@ -76,7 +76,7 @@ class CMlp(nn.Module):
         x = self.drop(x)
         return x
 
-    
+
 class Attention(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., trade_off=1):
         super().__init__()
@@ -94,8 +94,10 @@ class Attention(nn.Module):
 
     def forward(self, x):
         B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C //
+                                  self.num_heads).permute(2, 0, 3, 1, 4)
+        # make torchscript happy (cannot use tensor as tuple)
+        q, k, v = qkv[0], qkv[1], qkv[2]
 
         attn = (q @ k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
@@ -115,15 +117,19 @@ class Attention(nn.Module):
             # the last one is rrepresentative token
             cls_attn = torch.mean(attn[:, :, 0, 1:-1], dim=1)
             if self.training:
-                temp_attn = (1 - tradeoff) * global_attn[:, :(N - 2)] + tradeoff * cls_attn
-                global_attn = torch.cat((temp_attn, global_attn[:, (N - 2):]), dim=1)
+                temp_attn = (1 - tradeoff) * \
+                    global_attn[:, :(N - 2)] + tradeoff * cls_attn
+                global_attn = torch.cat(
+                    (temp_attn, global_attn[:, (N - 2):]), dim=1)
             else:
                 # 1. Calculate the new values for the first (N-2) elements
-                modified_part = (1 - tradeoff) * global_attn[:, :(N - 2)] + tradeoff * cls_attn
+                modified_part = (1 - tradeoff) * \
+                    global_attn[:, :(N - 2)] + tradeoff * cls_attn
                 # 2. Get the unchanged last 2 elements
                 unmodified_part = global_attn[:, (N - 2):]
                 # 3. Concatenate them along dimension 1 to create a new tensor
-                global_attn = torch.cat([modified_part, unmodified_part], dim=1)
+                global_attn = torch.cat(
+                    [modified_part, unmodified_part], dim=1)
 
         attn = self.attn_drop(attn)
 
@@ -143,25 +149,32 @@ class CBlock(nn.Module):
         self.conv2 = nn.Conv2d(dim, dim, 1)
         self.attn = nn.Conv2d(dim, dim, 5, padding=2, groups=dim)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.drop_path = DropPath(
+            drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = nn.BatchNorm2d(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = CMlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.mlp = CMlp(
+            in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
         global layer_scale
         self.ls = layer_scale
         if self.ls:
             global init_value
             print(f"Use layer_scale: {layer_scale}, init_values: {init_value}")
-            self.gamma_1 = nn.Parameter(init_value * torch.ones((1, dim, 1, 1)),requires_grad=True)
-            self.gamma_2 = nn.Parameter(init_value * torch.ones((1, dim, 1, 1)),requires_grad=True)
+            self.gamma_1 = nn.Parameter(
+                init_value * torch.ones((1, dim, 1, 1)), requires_grad=True)
+            self.gamma_2 = nn.Parameter(
+                init_value * torch.ones((1, dim, 1, 1)), requires_grad=True)
 
     def forward(self, x):
         x = x + self.pos_embed(x)
         if self.ls:
-            x = x + self.drop_path(self.gamma_1 * self.conv2(self.attn(self.conv1(self.norm1(x)))))
+            x = x + self.drop_path(self.gamma_1 *
+                                   self.conv2(self.attn(self.conv1(self.norm1(x)))))
             x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))
         else:
-            x = x + self.drop_path(self.conv2(self.attn(self.conv1(self.norm1(x)))))
+            x = x + \
+                self.drop_path(self.conv2(
+                    self.attn(self.conv1(self.norm1(x)))))
             x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 
@@ -178,10 +191,12 @@ class EvoSABlock(nn.Module):
             num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
             attn_drop=attn_drop, proj_drop=drop, trade_off=trade_off)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.drop_path = DropPath(
+            drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim,
+                       act_layer=act_layer, drop=drop)
         self.prune_ratio = prune_ratio
         self.downsample = downsample
         if downsample:
@@ -191,10 +206,13 @@ class EvoSABlock(nn.Module):
         if self.ls:
             global init_value
             print(f"Use layer_scale: {layer_scale}, init_values: {init_value}")
-            self.gamma_1 = nn.Parameter(init_value * torch.ones((dim)),requires_grad=True)
-            self.gamma_2 = nn.Parameter(init_value * torch.ones((dim)),requires_grad=True)
+            self.gamma_1 = nn.Parameter(
+                init_value * torch.ones((dim)), requires_grad=True)
+            self.gamma_2 = nn.Parameter(
+                init_value * torch.ones((dim)), requires_grad=True)
             if self.prune_ratio != 1:
-                self.gamma_3 = nn.Parameter(init_value * torch.ones((dim)),requires_grad=True)
+                self.gamma_3 = nn.Parameter(
+                    init_value * torch.ones((dim)), requires_grad=True)
 
     def forward(self, cls_token, x):
         x = x + self.pos_embed(x)
@@ -211,7 +229,7 @@ class EvoSABlock(nn.Module):
                 x = x + self.drop_path(self.mlp(self.norm2(x)))
             cls_token, x = x[:, :1], x[:, 1:]
             x = x.transpose(1, 2).contiguous().reshape(B, C, H, W)
-            return cls_token, x  
+            return cls_token, x
         else:
             global global_attn, token_indices
             # calculate the number of informative tokens
@@ -221,10 +239,12 @@ class EvoSABlock(nn.Module):
             indices = torch.argsort(global_attn, dim=1, descending=True)
 
             # concatenate x, global attention and token indices => x_ga_ti
-            # rearrange the tensor according to new indices 
-            x_ga_ti = torch.cat((x, global_attn.unsqueeze(-1), token_indices.unsqueeze(-1)), dim=-1)
+            # rearrange the tensor according to new indices
+            x_ga_ti = torch.cat(
+                (x, global_attn.unsqueeze(-1), token_indices.unsqueeze(-1)), dim=-1)
             x_ga_ti = easy_gather(x_ga_ti, indices)
-            x_sorted, global_attn, token_indices = x_ga_ti[:, :, :-2], x_ga_ti[:, :, -2], x_ga_ti[:, :, -1]
+            x_sorted, global_attn, token_indices = x_ga_ti[:,
+                                                           :, :-2], x_ga_ti[:, :, -2], x_ga_ti[:, :, -1]
 
             # informative tokens
             x_info = x_sorted[:, :N_]
@@ -246,7 +266,8 @@ class EvoSABlock(nn.Module):
                 fast_update = fast_update + tmp_x[:, -1:]
                 x = x + self.drop_path(self.gamma_2 * tmp_x)
                 # fast update
-                x_drop = x_drop + self.gamma_3 * fast_update.expand(-1, N - N_, -1)
+                x_drop = x_drop + self.gamma_3 * \
+                    fast_update.expand(-1, N - N_, -1)
             else:
                 # slow update
                 fast_update = 0
@@ -271,9 +292,11 @@ class EvoSABlock(nn.Module):
             old_global_scale = torch.sum(global_attn, dim=1, keepdim=True)
             # recover order
             indices = torch.argsort(token_indices, dim=1)
-            x_ga_ti = torch.cat((x_sorted, global_attn.unsqueeze(-1), token_indices.unsqueeze(-1)), dim=-1)
+            x_ga_ti = torch.cat(
+                (x_sorted, global_attn.unsqueeze(-1), token_indices.unsqueeze(-1)), dim=-1)
             x_ga_ti = easy_gather(x_ga_ti, indices)
-            x_patch, global_attn, token_indices = x_ga_ti[:, :, :-2], x_ga_ti[:, :, -2], x_ga_ti[:, :, -1]
+            x_patch, global_attn, token_indices = x_ga_ti[:,
+                                                          :, :-2], x_ga_ti[:, :, -2], x_ga_ti[:, :, -1]
             x_patch = x_patch.transpose(1, 2).contiguous().reshape(B, C, H, W)
 
             if self.downsample:
@@ -284,17 +307,19 @@ class EvoSABlock(nn.Module):
                 new_global_scale = torch.sum(global_attn, dim=1, keepdim=True)
                 scale = old_global_scale / new_global_scale
                 global_attn = global_attn * scale
-            
+
             return cls_token, x_patch
-   
+
 
 class PatchEmbed(nn.Module):
     """ Image to Patch Embedding
     """
+
     def __init__(self, patch_size=16, in_chans=3, embed_dim=768):
         super().__init__()
         self.norm = nn.LayerNorm(embed_dim)
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.proj = nn.Conv2d(in_chans, embed_dim,
+                              kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
         x = self.proj(x)
@@ -309,10 +334,12 @@ class head_embedding(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(head_embedding, self).__init__()
         self.proj = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels // 2, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),
+            nn.Conv2d(in_channels, out_channels // 2,
+                      kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),
             nn.BatchNorm2d(out_channels // 2),
             nn.GELU(),
-            nn.Conv2d(out_channels // 2, out_channels, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),
+            nn.Conv2d(out_channels // 2, out_channels,
+                      kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),
             nn.BatchNorm2d(out_channels),
         )
 
@@ -326,7 +353,8 @@ class middle_embedding(nn.Module):
         super(middle_embedding, self).__init__()
 
         self.proj = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),
+            nn.Conv2d(in_channels, out_channels, kernel_size=(
+                3, 3), stride=(2, 2), padding=(1, 1)),
             nn.BatchNorm2d(out_channels),
         )
 
@@ -334,16 +362,18 @@ class middle_embedding(nn.Module):
         x = self.proj(x)
         return x
 
-    
+
 class UniFormer_Light_ABN_CF_GAP(nn.Module):
     """ Vision Transformer
     A PyTorch impl of : `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale`  -
         https://arxiv.org/abs/2010.11929
     """
+
     def __init__(self, depth=[3, 4, 8, 3], in_chans=3, num_classes=1000, embed_dim=[64, 128, 320, 512],
                  head_dim=64, mlp_ratio=[4., 4., 4., 4.], qkv_bias=True, qk_scale=None, representation_size=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0., norm_layer=None, conv_stem=False,
-                 prune_ratio=[[], [], [1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5]],
+                 prune_ratio=[[], [], [1, 0.5, 0.5, 0.5,
+                                       0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5]],
                  trade_off=[[], [], [1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5]]):
         """
         Args:
@@ -365,10 +395,12 @@ class UniFormer_Light_ABN_CF_GAP(nn.Module):
         """
         super().__init__()
         self.num_classes = num_classes
-        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
-        norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6) 
+        # num_features for consistency with other models
+        self.num_features = self.embed_dim = embed_dim
+        norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         if conv_stem:
-            self.patch_embed1 = head_embedding(in_channels=in_chans, out_channels=embed_dim[0])
+            self.patch_embed1 = head_embedding(
+                in_channels=in_chans, out_channels=embed_dim[0])
             self.patch_embed2 = PatchEmbed(
                 patch_size=2, in_chans=embed_dim[0], embed_dim=embed_dim[1])
             self.patch_embed3 = PatchEmbed(
@@ -390,7 +422,9 @@ class UniFormer_Light_ABN_CF_GAP(nn.Module):
         self.cls_upsample = nn.Linear(embed_dim[2], embed_dim[3])
 
         self.pos_drop = nn.Dropout(p=drop_rate)
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depth))]  # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate,
+                                                # stochastic depth decay rule
+                                                sum(depth))]
         num_heads = [dim // head_dim for dim in embed_dim]
         self.blocks1 = nn.ModuleList([
             CBlock(
@@ -402,11 +436,11 @@ class UniFormer_Light_ABN_CF_GAP(nn.Module):
                 dim=embed_dim[1], num_heads=num_heads[1], mlp_ratio=mlp_ratio[1], qkv_bias=qkv_bias, qk_scale=qk_scale,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i+depth[0]], norm_layer=norm_layer)
             for i in range(depth[1])])
-        
+
         self.attention_branch = nn.Sequential(
             *copy.deepcopy(self.blocks2),
-            
-            #nn.BatchNorm2d(192),
+
+            # nn.BatchNorm2d(192),
             nn.Conv2d(128, num_classes, kernel_size=1, padding=0, bias=False),
             nn.BatchNorm2d(num_classes),
             nn.ReLU(),
@@ -418,20 +452,22 @@ class UniFormer_Light_ABN_CF_GAP(nn.Module):
         self.blocks3 = nn.ModuleList([
             EvoSABlock(
                 dim=embed_dim[2], num_heads=num_heads[2], mlp_ratio=mlp_ratio[2], qkv_bias=qkv_bias, qk_scale=qk_scale,
-                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i+depth[0]+depth[1]], norm_layer=norm_layer,
+                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i +
+                                                                        depth[0]+depth[1]], norm_layer=norm_layer,
                 prune_ratio=prune_ratio[2][i], trade_off=trade_off[2][i],
                 downsample=True if i == depth[2] - 1 else False)
             for i in range(depth[2])])
         self.blocks4 = nn.ModuleList([
             EvoSABlock(
                 dim=embed_dim[3], num_heads=num_heads[3], mlp_ratio=mlp_ratio[3], qkv_bias=qkv_bias, qk_scale=qk_scale,
-                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i+depth[0]+depth[1]+depth[2]], norm_layer=norm_layer,
+                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i +
+                                                                        depth[0]+depth[1]+depth[2]], norm_layer=norm_layer,
                 prune_ratio=prune_ratio[3][i], trade_off=trade_off[3][i])
-        for i in range(depth[3])])
+            for i in range(depth[3])])
 
         self.norm = nn.BatchNorm2d(embed_dim[-1])
         self.norm_cls = nn.LayerNorm(embed_dim[-1])
-        
+
         # Representation layer
         if representation_size:
             self.num_features = representation_size
@@ -443,11 +479,14 @@ class UniFormer_Light_ABN_CF_GAP(nn.Module):
             self.pre_logits = nn.Identity()
 
         # Classifier head
-        self.head = nn.Linear(embed_dim[-1], num_classes) if num_classes > 0 else nn.Identity()
-        self.head_cls = nn.Linear(embed_dim[-1], num_classes) if num_classes > 0 else nn.Identity()
+        self.gap_conv = nn.Conv2d(
+            embed_dim[-1], num_classes, 1) if num_classes > 0 else nn.Identity()
+        self.classifier = nn.AdaptiveAvgPool2d(1)
+        self.head_cls = nn.Linear(
+            embed_dim[-1], num_classes) if num_classes > 0 else nn.Identity()
         self.gradients = None
-        
-        #self.apply(self._init_weights)
+
+        # self.apply(self._init_weights)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -463,18 +502,19 @@ class UniFormer_Light_ABN_CF_GAP(nn.Module):
         return {'pos_embed', 'cls_token'}
 
     def get_classifier(self):
-        return self.head
+        return self.gap_conv
 
     def reset_classifier(self, num_classes, global_pool=''):
         self.num_classes = num_classes
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.gap_conv = nn.Conv2d(
+            self.embed_dim[-1], num_classes, 1) if num_classes > 0 else nn.Identity()
 
     def activations_hook(self, grad):
-        self.gradients = F.adaptive_avg_pool2d(grad, 1)
+        self.gradients = grad
 
     def get_activations_gradient(self):
         return self.gradients
-    
+
     def get_activations(self, x):
         B = x.shape[0]
         x = self.patch_embed1(x)
@@ -508,7 +548,8 @@ class UniFormer_Light_ABN_CF_GAP(nn.Module):
         cls_token = self.cls_token.expand(rx.shape[0], -1, -1)
         global global_attn, token_indices
         global_attn = 0
-        token_indices = torch.arange(rx.shape[2] * rx.shape[3], dtype=torch.long, device=rx.device).unsqueeze(0)
+        token_indices = torch.arange(
+            rx.shape[2] * rx.shape[3], dtype=torch.long, device=rx.device).unsqueeze(0)
         token_indices = token_indices.expand(rx.shape[0], -1)
         for blk in self.blocks3:
             cls_token, rx = blk(cls_token, rx)
@@ -516,7 +557,8 @@ class UniFormer_Light_ABN_CF_GAP(nn.Module):
         cls_token = self.cls_upsample(cls_token)
         rx = self.patch_embed4(rx)
         # whether reset global attention? Now simple avgpool
-        token_indices = torch.arange(rx.shape[2] * rx.shape[3], dtype=torch.long, device=rx.device).unsqueeze(0)
+        token_indices = torch.arange(
+            rx.shape[2] * rx.shape[3], dtype=torch.long, device=rx.device).unsqueeze(0)
         token_indices = token_indices.expand(rx.shape[0], -1)
         for blk in self.blocks4:
             cls_token, rx = blk(cls_token, rx)
@@ -529,11 +571,19 @@ class UniFormer_Light_ABN_CF_GAP(nn.Module):
 
     def forward(self, x):
         cls_token, x = self.forward_features(x)
-        x = x.flatten(2).mean(-1)
+
+        # Para o grad-cam
+        x = F.relu(x, inplace=True)
+
+        if x.requires_grad:
+            x.register_hook(self.activations_hook)
+
+        x = self.gap_conv(x)
+        x = self.classifier(x)
+        x = x[:, :, 0, 0]
+
         if self.training:
-            x = self.head(x), self.head_cls(cls_token.squeeze(1))
-        else:
-            x = self.head(x)
+            x = x, self.head_cls(cls_token.squeeze(1))
         return x
 
 
@@ -541,8 +591,10 @@ class UniFormer_Light_ABN_CF_GAP(nn.Module):
 def uniformer_xs_abn_cf_gap(**kwargs):
     model = UniFormer_Light_ABN_CF_GAP(
         depth=[3, 5, 9, 3], conv_stem=True,
-        prune_ratio=[[], [], [1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5]],
-        trade_off=[[], [], [1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5]],
+        prune_ratio=[[], [], [1, 0.5, 0.5, 0.5, 0.5,
+                              0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5]],
+        trade_off=[[], [], [1, 0.5, 0.5, 0.5, 0.5,
+                            0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5]],
         embed_dim=[64, 128, 256, 512], head_dim=32, mlp_ratio=[3, 3, 3, 3], qkv_bias=True,
         **kwargs)
     model.default_cfg = _cfg()

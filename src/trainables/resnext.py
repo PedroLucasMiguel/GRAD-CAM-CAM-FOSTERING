@@ -5,12 +5,13 @@ from .trainer.trainer import TrainerFramework
 from torchvision.models import resnext50_32x4d
 from .global_config import *
 from .models.resnext_baseline import ResNext50
+from .models.resnext_abn_cf_gap import ResNextABNCFGAP
 
 class TrainableResNextABNCFGAP(TrainerFramework):
   def __init__(self, dataset_name: str) -> None:
     self.n_classes = len(os.listdir(f"../datasets/{dataset_name}"))
     self.baseline = resnext50_32x4d(weights='IMAGENET1K_V1')
-    self.trainable_model = ResNext50(baseline_model=self.baseline, n_classes=self.n_classes)
+    self.trainable_model = ResNextABNCFGAP(baseline_model=self.baseline, n_classes=self.n_classes)
 
     super().__init__(epochs=EPOCHS,
                          batch_size=BATCH_SIZE,
@@ -34,10 +35,6 @@ class TrainableResNextABNCFGAP(TrainerFramework):
     for i in range(att.shape[0]):
       s = np.sum(att[i, 0, :, :])
       cam_normalized[i, :, :] = np.divide(att[i, 0, :, :], s)
-
-    # # Realizando a média dos batches
-    # #m = np.mean(cam_normalized, axis=0)
-    # #ce = CF*np.sum(m*np.log(m))
 
     cam_normalized_log = np.log(cam_normalized)
     cam_sum = np.sum(np.multiply(cam_normalized, cam_normalized_log))

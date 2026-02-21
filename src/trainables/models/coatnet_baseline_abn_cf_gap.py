@@ -3,8 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import copy
 
+
 class CoatNetABNCFGAP(nn.Module):
-    def __init__(self, baseline_model, n_classes:int, *args, **kwargs,) -> None:
+    def __init__(self, baseline_model, n_classes: int, *args, **kwargs,) -> None:
         super().__init__(*args, **kwargs)
 
         self.stem = copy.deepcopy(baseline_model.stem)
@@ -17,7 +18,7 @@ class CoatNetABNCFGAP(nn.Module):
         self.attention_branch = nn.Sequential(
             copy.deepcopy(baseline_model.stages[3]),
             nn.AdaptiveAvgPool2d(14),
-            #nn.BatchNorm2d(192),
+            # nn.BatchNorm2d(192),
             nn.Conv2d(768, n_classes, kernel_size=1, padding=0, bias=False),
             nn.BatchNorm2d(n_classes),
             nn.ReLU(),
@@ -27,24 +28,21 @@ class CoatNetABNCFGAP(nn.Module):
         )
 
         self.stage2 = copy.deepcopy(baseline_model.stages[3])
-        
+
         self.norm = copy.deepcopy(baseline_model.norm)
 
-        #self.gap_conv = nn.Conv2d(768, n_classes, 1)
+        self.gap_conv = nn.Conv2d(768, n_classes, 1)
 
-        #self.classifier = nn.AvgPool2d(7)
-
-        self.classifier = baseline_model.head
-        self.classifier.fc = nn.Linear(768, n_classes)
+        self.classifier = nn.AdaptiveAvgPool2d(1)
 
         self.gradients = None
 
     def activations_hook(self, grad):
-        self.gradients = F.adaptive_avg_pool2d(grad, 1)
+        self.gradients = grad
 
     def get_activations_gradient(self):
         return self.gradients
-    
+
     def get_activations(self, x):
         x = self.stem(x)
         x = self.stage1(x)
@@ -56,7 +54,7 @@ class CoatNetABNCFGAP(nn.Module):
 
         rx = self.stage2(rx)
         return rx
-    
+
     def forward(self, x):
         x = self.stem(x)
         x = self.stage1(x)
@@ -68,18 +66,16 @@ class CoatNetABNCFGAP(nn.Module):
         rx = self.stage2(rx)
 
         # Para o grad-cam
-        #rx = F.relu(rx, inplace=True)
+        rx = F.relu(rx, inplace=True)
 
         if rx.requires_grad:
-            h = rx.register_hook(self.activations_hook)
+            rx.register_hook(self.activations_hook)
 
         rx = self.norm(rx)
 
-        #rx = self.gap_conv(rx)
-
-        #rx = self.classifier(rx)
-        #rx = rx[:,:,0,0]
+        rx = self.gap_conv(rx)
 
         rx = self.classifier(rx)
+        rx = rx[:, :, 0, 0]
 
         return rx

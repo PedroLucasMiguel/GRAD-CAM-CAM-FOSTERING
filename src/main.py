@@ -1,6 +1,4 @@
-import os
 import torch
-import argparse
 from trainables.resnet import *
 from trainables.densenet import *
 from trainables.efficientnet import *
@@ -11,59 +9,26 @@ from trainables.uniformer import *
 from trainables.global_config import REPEATED_HOLDOUT_REPEATS
 
 if __name__ == '__main__':
-
-    # valid_models = ['RESNET50_ABN_CF',
-    #                 'RESNET50_ABN_CF_GAP',
-    #                 'DENSENET201_ABN',
-    #                 'DENSENET201_ABN_CF_GAP',
-    #                 'DENSENET201_ABN_VIT_CF_GAP',
-    #                 'RESNET50_ABN'
-    #                 'RESNET50',
-    #                 'DENSENET201',
-    #                 'EFFICIENTNET',
-    #                 'EFFICIENTNET_ABN_CF_GAP',
-    #                 'COATNETB0']
-
-    # Datasets
-    
-    #dts1 = ['UCSB']
-
-    # parser = argparse.ArgumentParser(prog='Comparator Framework',
-    #                                  description='This Program enable to compare the explanation os two models.')
-
-    # parser.add_argument('-m', '--model', type=str, required=True)
-    # parser.add_argument('-co', '--clearoutput', type=bool, required=False)
-
-    # args = parser.parse_args()
-
-    # if args.model not in valid_models:
-    #     print('Invalid Model!')
-    #     print(f'Valid Options = {valid_models}')
-
-    # if args.clearoutput:
-    #     print('Clearing previous outputs...')
-    #     os.system(f'rm -rf {os.path.join("..", "output", "*")}')
-
-    dts1 = ['CR', 'LA', 'LG', 'NHL', 'UCSB']
+    dataset_names = ['CR', 'LA', 'LG', 'NHL', 'UCSB']
     models_to_train = [
-        #'RESNET50',
-        #'RESNET50_ABN_CF_GAP',
-        # 'DENSENET201',
-        # 'DENSENET201_ABN_CF_GAP',
-        # 'EFFICIENTNET',
+        'RESNET50',
+        'RESNET50_ABN_CF_GAP',
+        'DENSENET201',
+        'DENSENET201_ABN_CF_GAP',
+        'EFFICIENTNET',
         'EFFICIENTNET_ABN_CF_GAP',
-        # 'CONVNEXT_SMALL',
-        # 'CONVNEXT_ABN_CF_GAP',
-        # 'RESNEXT50',
-        # 'RESNEXT_ABN_CF_GAP',
-        # 'COATNETB0',
-        # 'COATNET_ABN_CF_GAP',
-        #'UNIFORMER_BASELINE',
-        #'UNIFORMER_ABN_CF_GAP'
+        'CONVNEXT_SMALL',
+        'CONVNEXT_ABN_CF_GAP',
+        'RESNEXT50',
+        'RESNEXT_ABN_CF_GAP',
+        'COATNETB0',
+        'COATNET_ABN_CF_GAP',
+        'UNIFORMER_BASELINE',
+        'UNIFORMER_ABN_CF_GAP'
     ]
 
     for model in models_to_train:
-        for dn in dts1:
+        for dn in dataset_names:
             torch.cuda.empty_cache()
             match model:
                 case 'RESNET50_ABN_CF_GAP':
